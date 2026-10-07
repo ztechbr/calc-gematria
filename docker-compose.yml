@@ -1,0 +1,7 @@
+services:
+  gematria:
+    build: .
+    container_name: gematria-flask
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

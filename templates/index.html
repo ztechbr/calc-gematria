@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gematria, estudo exploratório</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Judaísmo, Kabbalah e Gematria</p>
+        <h1>Calculadora de Gematria</h1>
+        <p class="lead">Ferramenta exploratória para calcular valores de palavras e frases em hebraico e levantar pistas para estudo posterior em fontes judaicas.</p>
+      </div>
+      <div class="notice">
+        <strong>Importante</strong>
+        <span>O resultado numérico é objetivo dentro do método escolhido. A interpretação é contextual e não deve ser tratada como previsão, oráculo ou decisão religiosa.</span>
+      </div>
+    </section>
+
+    <section class="panel form-panel">
+      <label for="text">Texto em hebraico</label>
+      <textarea id="text" dir="auto" spellcheck="false" placeholder="Ex.: אהבה, חי, לב, תורה"></textarea>
+      <div class="controls">
+        <div class="field">
+          <label for="method">Método usado para interpretação</label>
+          <select id="method">
+            {% for key, label in methods.items() %}
+              <option value="{{ key }}" {% if key == 'standard' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button id="calculate">Calcular</button>
+      </div>
+      <p class="hint">Niqqud e cantilações são ignorados. Caracteres não hebraicos não entram no cálculo.</p>
+      <div id="error" class="error hidden"></div>
+    </section>
+
+    <section id="results" class="hidden">
+      <div class="section-title">
+        <h2>Resultados</h2>
+        <p id="normalized"></p>
+      </div>
+      <div id="method-cards" class="cards"></div>
+
+      <section class="panel">
+        <div class="section-title compact">
+          <h2>Decomposição por letra</h2>
+          <p id="breakdown-label"></p>
+        </div>
+        <div id="breakdown" class="breakdown" dir="rtl"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title compact">
+          <h2>Possíveis linhas de interpretação</h2>
+          <p>Catálogo curado para estudo inicial, com fonte e grau de sustentação.</p>
+        </div>
+        <div id="interpretations" class="interpretations"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title compact">
+          <h2>Palavras com o mesmo valor</h2>
+          <p>Equivalências exatas no valor padrão, quando encontradas no pequeno léxico interno.</p>
+        </div>
+        <div id="matches"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title compact">
+          <h2>Fontes para aprofundamento</h2>
+          <p>Prioridade para fonte primária, enciclopédia judaica e referências educacionais reconhecidas.</p>
+        </div>
+        <div id="sources" class="sources"></div>
+      </section>
+    </section>
+
+    <section class="panel methodology">
+      <h2>Critério metodológico</h2>
+      <p>O sistema não gera uma interpretação mística livre a partir de qualquer número. Primeiro calcula o valor das letras. Depois procura associações documentadas e equivalências exatas. Quando não há correspondência curada, informa isso explicitamente.</p>
+    </section>
+  </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const escapeHtml = (value) => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
+function renderMethodCards(methods, selectedMethod) {
+  $('method-cards').innerHTML = Object.entries(methods).map(([key, item]) => `
+    <article class="metric-card ${key === selectedMethod ? 'selected' : ''}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${item.value}</strong>
+    </article>
+  `).join('');
+}
+
+function renderBreakdown(methodData) {
+  $('breakdown').innerHTML = methodData.breakdown.map(item => `
+    <div class="letter-card">
+      <strong>${escapeHtml(item.letter)}</strong>
+      <span>${item.value}</span>
+    </div>
+  `).join('');
+}
+
+function renderInterpretations(data) {
+  const items = [...data.direct, ...data.heuristic];
+  $('interpretations').innerHTML = items.map(item => `
+    <article class="interpretation-card">
+      <div class="badge">${escapeHtml(item.status)}</div>
+      <h3>${escapeHtml(item.title)}</h3>
+      <p>${escapeHtml(item.interpretation)}</p>
+    </article>
+  `).join('') || '<p>Nenhuma interpretação curada encontrada.</p>';
+}
+
+function renderMatches(matches) {
+  if (!matches.length) {
+    $('matches').innerHTML = '<p class="muted">Nenhuma equivalência exata encontrada no léxico interno.</p>';
+    return;
+  }
+  $('matches').innerHTML = `<div class="match-grid">${matches.map(item => `
+    <article class="match-card">
+      <strong dir="rtl">${escapeHtml(item.hebrew)}</strong>
+      <span>${escapeHtml(item.translation)}</span>
+      <small>${item.value}</small>
+    </article>
+  `).join('')}</div>`;
+}
+
+function renderSources(sources) {
+  $('sources').innerHTML = sources.map(source => `
+    <article class="source-card">
+      <div>
+        <strong>${escapeHtml(source.title)}</strong>
+        <span>${escapeHtml(source.kind)}</span>
+        <p>${escapeHtml(source.note)}</p>
+      </div>
+      <a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">Abrir fonte</a>
+    </article>
+  `).join('');
+}
+
+async function calculate() {
+  $('error').classList.add('hidden');
+  const text = $('text').value;
+  const method = $('method').value;
+  try {
+    const response = await fetch('/api/calculate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, method})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Falha no cálculo.');
+
+    $('results').classList.remove('hidden');
+    $('normalized').textContent = `Texto normalizado: ${data.result.normalized}`;
+    renderMethodCards(data.result.methods, data.selected_method);
+    $('breakdown-label').textContent = data.selected_method_label;
+    renderBreakdown(data.result.methods[data.selected_method]);
+    renderInterpretations(data.interpretation);
+    renderMatches(data.interpretation.lexical_matches);
+    renderSources(data.sources);
+  } catch (err) {
+    $('results').classList.add('hidden');
+    $('error').textContent = err.message;
+    $('error').classList.remove('hidden');
+  }
+}
+
+$('calculate').addEventListener('click', calculate);
+$('text').addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') calculate();
+});
+</script>
+</body>
+</html>
